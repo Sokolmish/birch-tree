@@ -10,11 +10,20 @@ else()
     add_compile_options(-Wno-unknown-pragmas)
 endif()
 
+if (NOT NOT_USE_CONAN)
+    include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+    conan_basic_setup()
+endif()
+
 set (SRC_DIR ${PROJECT_SOURCE_DIR}/src)
-
 add_executable(birch-tree
-        ${SRC_DIR}/main.cpp)
+        ${SRC_DIR}/main.cpp
+        )
 
-find_package(fmt REQUIRED)
-target_include_directories(birch-tree PRIVATE ${FMT_INCLUDE_DIRS})
-target_link_libraries(birch-tree fmt)
+if (NOT_USE_CONAN)
+    find_package(fmt REQUIRED)
+    target_include_directories(birch-tree PRIVATE ${fmt_INCLUDE_DIRS})
+    target_link_libraries(birch-tree ${fmt_LIBRARIES})
+else()
+    target_link_libraries(birch-tree ${CONAN_LIBS})
+endif()
