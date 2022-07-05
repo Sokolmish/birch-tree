@@ -7,6 +7,7 @@ if(MSVC)
     add_compile_options(/W4)
 else()
     add_compile_options(-Wall -Wextra)
+    add_compile_options(-Wno-unknown-pragmas)
 endif()
 
 set (SRC_DIR ${PROJECT_SOURCE_DIR}/src)

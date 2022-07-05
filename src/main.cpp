@@ -1,5 +1,4 @@
 #include <vector>
-#include <unordered_map>
 #include <iostream>
 #include <algorithm>
 #include <filesystem>
@@ -9,27 +8,60 @@
 
 namespace fs = std::filesystem;
 
-static void initLsColors() {
+enum class FileColorType {
+    REGULAR, DIRECTORY, SYMLINK,
+    FIFO, BLOCKDEV, CHARDEV, SOCKET,
+    ORPHAN, MISSING,
+    SUID, SGID, STICKY_DIR,
+    EXECUTABLE, CAPABILITY,
+    STICKY_OTH_WR, OTHERS_WR,
+    DOOR,
+};
+
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "UnreachableCode"
+static fmt::text_style getStyle(FileColorType type) {
     using tc = fmt::terminal_color;
     using emp = fmt::emphasis;
 
-    std::unordered_map<std::string, fmt::text_style> ls_col{
-            { "fi", fmt::text_style() },               // Regular file
-            { "di", fmt::fg(tc::blue) | emp::bold },   // Directory
-            { "ln", fmt::fg(tc::cyan) | emp::bold },   // Symlink
-            { "pi", fmt::fg(tc::yellow) },             // FIFO
-            { "bd", fmt::fg(tc::yellow) | emp::bold }, // Block device
-            { "bd", fmt::fg(tc::yellow) | emp::bold }, // Character device
-            { "or", fmt::fg(tc::red) | emp::bold },    // Orphan link
-            { "mi", fmt::text_style() },               // Missing
-            { "so", fmt::fg(tc::magenta) | emp::bold}, // Socket
-            { "su", fmt::bg(tc::red) | emp::bold},     // SUID (u+s)
-            { "sg", fmt::bg(tc::yellow) | emp::bold},  // SGID (g+s)
-            // ca, tw, ow
-            { "st", fmt::bg(tc::blue) },               // Sticky directory
-            { "ex", fmt::fg(tc::green) },              // Executable
-    };
+    switch (type) {
+        case FileColorType::REGULAR: // "fi"
+            return fmt::text_style();
+        case FileColorType::DIRECTORY: // "di" '/'
+            return fmt::fg(tc::blue) | emp::bold;
+        case FileColorType::SYMLINK: // "ln" '@'
+            return fmt::fg(tc::cyan) | emp::bold;
+        case FileColorType::FIFO: // "pi" '|'
+            return fmt::fg(tc::yellow);
+        case FileColorType::BLOCKDEV: // "bd"
+        case FileColorType::CHARDEV: // "cd"
+            return fmt::fg(tc::yellow) | emp::bold;
+        case FileColorType::ORPHAN: // "or"
+            return fmt::fg(tc::red) | emp::bold;
+        case FileColorType::MISSING: // "mi"
+            return fmt::text_style();
+        case FileColorType::SOCKET: // "so" '='
+        case FileColorType::DOOR: // "do" '>'
+            return fmt::fg(tc::magenta) | emp::bold;
+        case FileColorType::SUID: // "su"
+            return fmt::bg(tc::red);
+        case FileColorType::SGID: // "sg"
+            return fmt::fg(tc::black) | fmt::bg(tc::yellow);
+        case FileColorType::STICKY_DIR: // "st"
+            return fmt::bg(tc::blue);
+        case FileColorType::EXECUTABLE: // "ex" '*'
+            return fmt::fg(tc::green) | emp::bold;
+
+        case FileColorType::CAPABILITY: // "ca"
+            return fmt::fg(tc::black) | fmt::bg(tc::red);
+        case FileColorType::STICKY_OTH_WR: // "tw"
+            return fmt::fg(tc::black) | fmt::bg(tc::green);
+        case FileColorType::OTHERS_WR: // "ow"
+            return fmt::fg(tc::blue) | fmt::bg(tc::green);
+    }
+    return fmt::text_style();
 }
+#pragma clang diagnostic pop
 
 struct DirInfo {
     fs::path name;
@@ -53,54 +85,65 @@ struct DirInfo {
     }
 };
 
-static std::string colorizeDir(fs::path const &dir) {
-    using tc = fmt::terminal_color;
-    using emp = fmt::emphasis;
-    // TODO: sticky => blue bg
-    return fmt::format(fmt::fg(tc::blue) | emp::bold, "{}", dir);
-}
-
-static std::string colorizeFile(fs::path const &file) {
-    using tc = fmt::terminal_color;
-    using emp = fmt::emphasis;
+static std::string colorizeFile(fs::path const &file, std::string const &text = "") {
     using pm = fs::perms;
+    using col = FileColorType;
 
     auto stat = fs::status(file);
     auto perms = stat.permissions();
-    auto pmExecAll = pm::owner_exec | pm::group_exec | pm::others_exec;
 
-    fmt::text_style style;
+    fmt::text_style style = getStyle(col::REGULAR);
     if (fs::is_symlink(file)) {
         auto lnkDst = fs::read_symlink(file);
+        if (lnkDst.is_relative())
+            lnkDst = file.parent_path() / lnkDst;
         if (fs::exists(lnkDst))
-            style = fmt::fg(tc::cyan) | emp::bold;
+            style = getStyle(col::SYMLINK);
         else
-            style = fmt::fg(tc::red) | emp::bold;
+            style = getStyle(col::ORPHAN);
     }
     else if (fs::is_directory(file)) {
         if ((perms & pm::sticky_bit) != pm::none)
-            style = fmt::bg(tc::blue);
+            style = getStyle(col::STICKY_DIR);
         else
-            style = fmt::fg(tc::blue) | emp::bold;
+            style = getStyle(col::DIRECTORY);
     }
+    else if (fs::is_block_file(file))
+        style = getStyle(col::BLOCKDEV);
+    else if (fs::is_character_file(file))
+        style = getStyle(col::CHARDEV);
+    else if (fs::is_fifo(file))
+        style = getStyle(col::FIFO);
+    else if (fs::is_socket(file))
+        style = getStyle(col::SOCKET);
     else if (fs::is_regular_file(file)) {
-        if (fs::is_block_file(file) || fs::is_character_file(file))
-            style = fmt::fg(tc::yellow) | emp::bold;
-        else if (fs::is_fifo(file))
-            style = fmt::fg(tc::yellow);
-        else if (fs::is_socket(file))
-            style = fmt::fg(tc::magenta) | emp::bold;
-        else {
-            if ((perms & pmExecAll) != pm::none)
-                style = fmt::fg(tc::green) | emp::bold;
+        auto pmExecAll = pm::owner_exec | pm::group_exec | pm::others_exec;
+        if ((perms & pm::set_uid) != pm::none)
+            style = getStyle(col::SUID);
+        else if ((perms & pm::set_gid) != pm::none)
+            style = getStyle(col::SGID);
+#if 0
+        else if ((perms & pm::others_write) != pm::none) {
+            if ((perms & pm::sticky_bit) != pm::none)
+                style = getStyle(col::STICKY_OTH_WR);
+            else
+                style = getStyle(col::OTHERS_WR);
         }
+#endif
+        else if ((perms & pmExecAll) != pm::none)
+            style = getStyle(col::EXECUTABLE);
     }
-    // TODO: suid, sgid, sow, ow, missing
-    return fmt::format(style, "{}", file.filename());
+    else if (!fs::exists(file))
+        style = getStyle(col::MISSING);
+
+    if (text.empty())
+        return fmt::format(style, "{}", file.filename());
+    else
+        return fmt::format(style, "{}", text);
 }
 
 static void walkDirectory(DirInfo const &dir, std::string const &prefix) {
-    using namespace std::string_literals; // │├─┬└
+    using namespace std::string_literals; // ┬
     const std::array prefMid { "├─ "s, "│  "s };
     const std::array prefLast { "└─ "s, "   "s };
 
@@ -118,8 +161,12 @@ static void walkDirectory(DirInfo const &dir, std::string const &prefix) {
         fmt::print("{}", turnStr);
 
         if (fs::is_symlink(entry)) {
-            auto dst = fs::read_symlink(entry.path());
-            fmt::print("{} -> {}\n", colorizeFile(entry), colorizeFile(dst));
+            fs::path dst = fs::read_symlink(entry.path());
+            fs::path absDst = dst;
+            if (absDst.is_relative())
+                absDst = entry.path().parent_path() / absDst;
+            fmt::print("{} -> {}\n", colorizeFile(entry),
+                       colorizeFile(absDst, dst));
         }
         else if (fs::is_directory(entry)) {
             if (isLast) {
@@ -149,27 +196,45 @@ static void walkDirectory(DirInfo const &dir, std::string const &prefix) {
     }
 }
 
-int main(int argc, char **argv) {
-    fs::path rootPath = argc <= 1 ? "./" : argv[1];
-    if (!fs::exists(rootPath)) {
-        fmt::print("File '{}' doesn't exist\n", rootPath);
-        return EXIT_FAILURE;
-    }
-
-    if (fs::is_directory(rootPath)) {
-        DirInfo dinfo(rootPath);
+static void processRoot(fs::path const &root) {
+    if (fs::is_directory(root)) {
+        DirInfo dinfo(root);
         if (!dinfo.isError) {
-            fmt::print("{}\n", colorizeDir(rootPath));
+            fmt::print("{}\n", colorizeFile(root, root));
             std::string prefix;
             walkDirectory(dinfo, prefix);
         }
         else {
-            fmt::print("{} [error opening dir]\n", colorizeDir(rootPath));
+            fmt::print("{} [error opening dir]\n",
+                       colorizeFile(root, root));
         }
     }
+    else if (fs::is_symlink(root)) {
+        fs::path dst = fs::read_symlink(root);
+        fs::path absDst = dst;
+        if (absDst.is_relative())
+            absDst = root.parent_path() / absDst;
+        fmt::print("{} -> {}\n", colorizeFile(root, root),
+                   colorizeFile(absDst, dst));
+    }
     else {
-        fmt::print("{}\n", colorizeFile(rootPath));
+        fmt::print("{}\n", colorizeFile(root, root));
+    }
+}
+
+int main(int argc, char **argv) {
+    if (argc <= 1) {
+        processRoot("./");
+        return EXIT_SUCCESS;
     }
 
+    for (int i = 1; i < argc; i++) {
+        fs::path rootPath = argv[i];
+        if (!fs::exists(rootPath)) {
+            fmt::print("File '{}' doesn't exist\n", rootPath);
+            return EXIT_FAILURE;
+        }
+        processRoot(rootPath);
+    }
     return EXIT_SUCCESS;
 }
