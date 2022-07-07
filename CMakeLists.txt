@@ -7,7 +7,7 @@ if(MSVC)
     add_compile_options(/W4)
 else()
     add_compile_options(-Wall -Wextra)
-    add_compile_options(-Wno-unknown-pragmas)
+#    add_compile_options(-Wno-unknown-pragmas)
 endif()
 
 if (NOT NOT_USE_CONAN)
@@ -18,6 +18,7 @@ endif()
 set (SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 add_executable(birch-tree
         ${SRC_DIR}/main.cpp
+        ${SRC_DIR}/birch_tree.cpp
         )
 
 if (NOT_USE_CONAN)

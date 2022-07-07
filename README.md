@@ -11,8 +11,10 @@ There are some differences from original tree:
 There are following requirements:
 
 - [fmtlib] (v8, but also should work with early versions)
+- [CLI11] (tested with version v2.2)
   
 [fmtlib]: https://fmt.dev/latest/index.html
+[CLI11]: https://github.com/CLIUtils/CLI11
 
 ### Building with conan
 
