@@ -1,10 +1,20 @@
 # Birch-tree
 
 This is a replacement for standard linux utility tree.
+Also, it should work on Windows.
 
 There are some differences from original tree:
 
 - Collapses chain of directories with 1 files into single line
+- Allows writing argument value directly after it's name
+without space: `birch-tree -L1`
+
+### Future plans
+
+- Parse colors from environment variable, like `LS_COLORS`
+- Support more flags from original tree
+- Consider using horizontal tree branches (like in pstree output)
+- Do better formatting using `COLUMNS` environment variable
 
 ## Building
 
@@ -39,4 +49,17 @@ via following commands.
 mkdir build && cd build
 cmake -DNOT_USE_CONAN ..
 cmake --build .
+```
+
+## Examples
+
+```
+      birch-tree      |      original tree
+                      |
+ ./dir/               | ./dir/
+ └─ src/main/java/    | └── src
+    ├─ file.java      |     └── main
+    └─ main.java      |         └── java
+                      |             ├── file.java
+                      |             └── main.java
 ```
