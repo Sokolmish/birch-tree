@@ -25,7 +25,7 @@ static bool isStdoutTerminal() {
     return isTerm;
 #elif defined(OS_WIN)
     static const bool isTerm =
-            (_isatty(_fileno(stdout)) || isMsysPty(_fileno(stdout)));
+            (_isatty(_fileno(stdout))); // || isMsysPty(_fileno(stdout))
     return isTerm;
 #else
     return false;
@@ -123,7 +123,7 @@ char BirchTree::getFiletypeChar(FileColorType type) const {
 #endif // __CLION_IDE__
 
 
-std::string BirchTree::colorizeFile(FileInfo &file, std::string const &text = "") {
+std::string BirchTree::colorizeFile(FileInfo &file, fs::path const &text = "") {
     using pm = fs::perms;
 
     fs::perms perms = file.getSymStat().permissions();
@@ -173,10 +173,10 @@ std::string BirchTree::colorizeFile(FileInfo &file, std::string const &text = ""
         fType = FileColorType::MISSING;
 
     fmt::text_style style = getStyle(fType);
-    std::string wrText = text;
-    if (wrText.empty())
-        wrText = file.getPath().filename();
-    std::string res = fmt::format(style, "{}", wrText);
+    fs::path wrText = text;
+    if (wrText.string().empty())
+        wrText = file.getPath().filename().string();
+    std::string res = fmt::format(style, "{}", wrText.string());
     if (opts.filesSigns) {
         if (char sign = getFiletypeChar(fType))
             res += sign;
@@ -325,14 +325,14 @@ void BirchTree::walkDirectory(DirInfo &dir, std::string const &prefix, int depth
             while (isDirCollapsable(nestedDir)) {
                 dirsCnt++;
                 fmt::print("{}{}", colorizeFile(nestedDir),
-                           fs::path::preferred_separator);
+                           static_cast<char>(fs::path::preferred_separator));
                 nestedDir = DirInfo(nestedDir.entries[0]);
             }
 
             if (!nestedDir.isError) {
                 dirsCnt++;
                 fmt::print("{}{}\n", colorizeFile(nestedDir),
-                           fs::path::preferred_separator);
+                           static_cast<char>(fs::path::preferred_separator));
                 walkDirectory(nestedDir, skipStr, depth + 1);
             }
             else {

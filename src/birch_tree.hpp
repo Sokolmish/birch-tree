@@ -129,7 +129,7 @@ private:
 
     void transformDirContent(std::vector<FileInfo> &files) const;
 
-    [[nodiscard]] std::string colorizeFile(FileInfo &file, std::string const &text);
+    [[nodiscard]] std::string colorizeFile(FileInfo &file, fs::path const &text);
 
     [[nodiscard]] fmt::text_style getStyle(FileColorType type) const;
     [[nodiscard]] char getFiletypeChar(FileColorType type) const;
